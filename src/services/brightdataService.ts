@@ -8,7 +8,7 @@ const LIMIT_PER_INPUT = 2;
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 15 * 60 * 1000;
 
-const WEBHOOK_URL = process.env.WEBHOOK_URL || "https://webhook.site/a640096a-2c0a-4b6e-9b9d-5698098181bc";
+const WEBHOOK_URL = process.env.WEBHOOK_URL || process.env.NGROK_WEBHOOK_URL || "http://localhost:3000/api/consume";
 const AUTH_HEADER = process.env.BRIGHTDATA_API_KEY;
 
 export function saveWebhookDataLocally(snapshotId: string, data: any) {

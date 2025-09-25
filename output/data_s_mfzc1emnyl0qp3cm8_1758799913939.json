@@ -1,0 +1,34 @@
+[
+  {
+    "job_title": "Senior Software Developer",
+    "company": "Tech Corp",
+    "location": "San Francisco, CA",
+    "job_url": "https://example.com/job1",
+    "salary": "$120,000 - $150,000",
+    "job_posting_id": "12345",
+    "input": {
+      "snapshot_id": "s_mfzc1emnyl0qp3cm8",
+      "discovery_input": {
+        "keyword": "test developer",
+        "location": "San Francisco",
+        "country": "US"
+      }
+    }
+  },
+  {
+    "job_title": "Full Stack Developer",
+    "company": "StartupXYZ",
+    "location": "San Francisco, CA",
+    "job_url": "https://example.com/job2",
+    "salary": "$100,000 - $130,000",
+    "job_posting_id": "12346",
+    "input": {
+      "snapshot_id": "s_mfzc1emnyl0qp3cm8",
+      "discovery_input": {
+        "keyword": "test developer",
+        "location": "San Francisco",
+        "country": "US"
+      }
+    }
+  }
+]

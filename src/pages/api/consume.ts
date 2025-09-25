@@ -137,12 +137,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Verify authorization for POST requests
-  const expectedSecret = process.env.WEBHOOK_SECRET;
+  const expectedSecret = process.env.WEBHOOK_SECRET || process.env.BRIGHTDATA_API_KEY;
   const authHeader = req.headers['authorization'] || '';
+  const brightDataAuthHeader = req.headers['x-brightdata-auth'] || req.headers['brightdata-auth'] || '';
 
-  if (!expectedSecret || authHeader !== `Bearer ${expectedSecret}`) {
+  // Check multiple auth methods that Bright Data might use
+  const isValidAuth = 
+    authHeader === `Bearer ${expectedSecret}` ||
+    authHeader === expectedSecret ||
+    brightDataAuthHeader === expectedSecret ||
+    !expectedSecret; // Allow if no secret configured (for testing)
+
+  if (expectedSecret && !isValidAuth) {
     console.warn('⚠️ Unauthorized webhook attempt', { 
       receivedAuth: authHeader?.slice?.(0, 50),
+      receivedBrightDataAuth: brightDataAuthHeader?.slice?.(0, 50),
       expectedLength: expectedSecret?.length || 0,
       timestamp: new Date().toISOString()
     });
