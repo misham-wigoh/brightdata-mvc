@@ -140,18 +140,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const expectedSecret = process.env.WEBHOOK_SECRET || process.env.BRIGHTDATA_API_KEY;
   const authHeader = req.headers['authorization'] || '';
   const brightDataAuthHeader = req.headers['x-brightdata-auth'] || req.headers['brightdata-auth'] || '';
+  const urlAuthParam = req.query.auth_header || ''; // Bright Data sends auth in URL param
 
   // Check multiple auth methods that Bright Data might use
   const isValidAuth = 
     authHeader === `Bearer ${expectedSecret}` ||
     authHeader === expectedSecret ||
     brightDataAuthHeader === expectedSecret ||
+    urlAuthParam === expectedSecret ||
     !expectedSecret; // Allow if no secret configured (for testing)
+
+  console.log('🔐 Auth check:', {
+    hasAuthHeader: !!authHeader,
+    hasBrightDataHeader: !!brightDataAuthHeader,
+    hasUrlAuthParam: !!urlAuthParam,
+    expectedSecretLength: expectedSecret?.length || 0,
+    isValidAuth
+  });
 
   if (expectedSecret && !isValidAuth) {
     console.warn('⚠️ Unauthorized webhook attempt', { 
-      receivedAuth: authHeader?.slice?.(0, 50),
-      receivedBrightDataAuth: brightDataAuthHeader?.slice?.(0, 50),
+      receivedAuth: authHeader?.slice?.(0, 20) + '...',
+      receivedBrightDataAuth: brightDataAuthHeader?.slice?.(0, 20) + '...',
+      receivedUrlAuth: typeof urlAuthParam === 'string' ? urlAuthParam?.slice?.(0, 20) + '...' : 'not string',
       expectedLength: expectedSecret?.length || 0,
       timestamp: new Date().toISOString()
     });
