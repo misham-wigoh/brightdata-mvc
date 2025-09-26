@@ -1,8 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { 
-  runBrightDataJobWithWebhook, 
+import {
+  runBrightDataJobWithWebhook,
   runLinkedInCompanyJob,
-  getJobResults 
+  runBothPlatformsSimultaneously,
+  getJobResults
 } from "../../controllers/brightdataController";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -58,6 +59,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           linkedin_companies: {
             type: "linkedin_companies",
             companyUrls: ["required array of LinkedIn company URLs"]
+          },
+          both_platforms: {
+            type: "both_platforms",
+            keyword: "required job search keyword",
+            location: "optional job location",
+            country: "optional country code"
           }
         }
       });
@@ -71,10 +78,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ 
         success: false,
         error: "Missing 'type' parameter in request body",
-        supportedTypes: ["job_search", "linkedin_companies"],
+        supportedTypes: ["job_search", "linkedin_companies", "both_platforms"],
         example: {
           type: "job_search",
-          keyword: "software engineer",
+          keyword: "public health jobs",
           location: "Chennai",
           country: "IN"
         }
@@ -110,6 +117,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             error: "Failed to trigger job search",
             details: jobError.message,
             stack: process.env.NODE_ENV === 'development' ? jobError.stack : undefined
+          });
+        }
+
+      case "both_platforms":
+        try {
+          // Use defaults for missing parameters
+          const keyword = requestBody.keyword || "public health jobs";
+          const location = requestBody.location || "Chennai";
+          const country = requestBody.country || "IN";
+
+          const inputs = [{ keyword, location, country }];
+          console.log("🚀 Sending simultaneous job search to LinkedIn and Indeed:", inputs);
+
+          const bothResult = await runBothPlatformsSimultaneously(inputs);
+          console.log("✅ Both platforms triggered successfully:", bothResult);
+
+          return res.status(200).json({
+            success: true,
+            ...bothResult,
+            inputs: inputs
+          });
+
+        } catch (bothError: any) {
+          console.error("❌ Both platforms error:", bothError);
+          return res.status(500).json({
+            success: false,
+            error: "Failed to trigger both platforms job search",
+            details: bothError.message,
+            stack: process.env.NODE_ENV === 'development' ? bothError.stack : undefined
           });
         }
 
@@ -165,7 +201,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ 
           success: false,
           error: `Invalid type: ${type}`,
-          supportedTypes: ["job_search", "linkedin_companies"],
+          supportedTypes: ["job_search", "linkedin_companies", "both_platforms"],
           receivedType: type
         });
     }

@@ -8,19 +8,45 @@ import { Timestamp } from 'firebase-admin/firestore';
 // Helper function to determine job type from data
 function determineJobType(data: any[]): string {
   if (!data || data.length === 0) return 'unknown';
-  
+
   const firstItem = data[0];
-  
-  // Check if it's LinkedIn company data
-  if (firstItem.company_name || firstItem.linkedin_url || firstItem.company_url) {
+
+  // Check if it's Indeed job data FIRST (based on domain field or URL patterns)
+  if (
+    firstItem.domain?.includes('indeed.com') ||
+    firstItem.url?.includes('indeed.com') ||
+    firstItem.job_url?.includes('indeed.com') ||
+    firstItem.company_link?.includes('indeed.com') ||
+    (firstItem.discovery_input && firstItem.discovery_input.domain === 'indeed.com')
+  ) {
+    return 'indeed_jobs';
+  }
+
+  // Check if it's LinkedIn job data (based on URL patterns and specific fields)
+  if (
+    firstItem.url?.includes('linkedin.com/jobs') ||
+    firstItem.job_url?.includes('linkedin.com') ||
+    firstItem.company_url?.includes('linkedin.com') ||
+    firstItem.job_posting_id || // LinkedIn has job_posting_id
+    (firstItem.url && firstItem.url.includes('linkedin.com') && !firstItem.url.includes('company'))
+  ) {
+    return 'linkedin_jobs';
+  }
+
+  // Check if it's LinkedIn company data (specific company pages)
+  if (
+    firstItem.linkedin_url ||
+    (firstItem.company_url && firstItem.company_url.includes('linkedin.com/company')) ||
+    (firstItem.url && firstItem.url.includes('linkedin.com/company'))
+  ) {
     return 'linkedin_company';
   }
-  
-  // Check if it's job search data
-  if (firstItem.job_title || firstItem.job_url || firstItem.company || firstItem.job_posting_id) {
+
+  // Generic job search data (fallback)
+  if (firstItem.job_title || firstItem.company_name || firstItem.company) {
     return 'job_search';
   }
-  
+
   return 'unknown';
 }
 

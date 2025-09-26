@@ -8,3 +8,12 @@ export const apiClient = axios.create({
     Authorization: `Bearer ${process.env.BRIGHTDATA_API_KEY}`,
   },
 });
+
+export const indeedApiClient = axios.create({
+  baseURL: "https://api.brightdata.com",
+  timeout: 60000,
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${process.env.INDEED_API_KEY}`,
+  },
+});

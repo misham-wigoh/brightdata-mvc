@@ -37,7 +37,8 @@ const BrightDataDashboard: React.FC = () => {
     const [jobForm, setJobForm] = useState({
         keyword: 'public health jobs',
         location: 'Chennai, Bangalore',
-        country: 'IN'
+        country: 'IN',
+        platform: 'linkedin' // New field to choose platform
     });
 
     // Show notification
@@ -78,20 +79,32 @@ const BrightDataDashboard: React.FC = () => {
     const triggerJobSearch = async (): Promise<void> => {
         setLoading(true);
         try {
+            // Determine the type based on platform selection
+            let requestType = 'job_search'; // Default to LinkedIn only
+            if (jobForm.platform === 'both') {
+                requestType = 'both_platforms';
+            }
+
             const result = await apiCall('/api/brightdata-webhook', {
                 method: 'POST',
                 body: JSON.stringify({
-                    type: 'job_search',
-                    ...jobForm
+                    type: requestType,
+                    keyword: jobForm.keyword,
+                    location: jobForm.location,
+                    country: jobForm.country
                 })
             });
 
             setResults(result);
-            showNotification('Job search triggered successfully!');
 
-            if (result.snapshotId) {
-                loadSnapshots();
+            if (jobForm.platform === 'both') {
+                showNotification('Both LinkedIn and Indeed jobs triggered successfully!');
+            } else {
+                showNotification('LinkedIn job search triggered successfully!');
             }
+
+            // Refresh snapshots to show new data
+            loadSnapshots();
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
             showNotification(`Error: ${msg}`, 'error');
@@ -240,7 +253,7 @@ const BrightDataDashboard: React.FC = () => {
                             <div className="space-y-6">
                                 <div>
                                     <h2 className="text-xl font-semibold text-gray-900 mb-4">Job Search</h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">Keyword</label>
                                             <input
@@ -277,6 +290,20 @@ const BrightDataDashboard: React.FC = () => {
                                                 <option value="CA">Canada</option>
                                                 <option value="AU">Australia</option>
                                             </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Platform</label>
+                                            <select
+                                                value={jobForm.platform}
+                                                onChange={(e) => setJobForm(prev => ({ ...prev, platform: e.target.value }))}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="linkedin">LinkedIn Only</option>
+                                                <option value="both">Both LinkedIn & Indeed</option>
+                                            </select>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Choose LinkedIn only or scrape both platforms simultaneously
+                                            </p>
                                         </div>
                                     </div>
                                     <button

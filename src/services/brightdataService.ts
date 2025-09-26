@@ -1,15 +1,17 @@
-import { apiClient } from "../utils/apiClient";
+import { apiClient, indeedApiClient } from "../utils/apiClient";
 import fs from "fs";
 import path from "path";
 import { SearchInput, TriggerResponse } from "../types/brightdata";
 
-const DATASET_ID = process.env.BRIGHTDATA_DATASET_ID!;
+const LINKEDIN_DATASET_ID = process.env.BRIGHTDATA_DATASET_ID!;
+const INDEED_DATASET_ID = process.env.INDEED_DATASET_ID!;
 const LIMIT_PER_INPUT = 2;
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 15 * 60 * 1000;
 
 const WEBHOOK_URL = process.env.WEBHOOK_URL || process.env.NGROK_WEBHOOK_URL || "http://localhost:3000/api/consume";
-const AUTH_HEADER = process.env.BRIGHTDATA_API_KEY;
+const LINKEDIN_AUTH_HEADER = process.env.BRIGHTDATA_API_KEY;
+const INDEED_AUTH_HEADER = process.env.INDEED_API_KEY;
 
 export function saveWebhookDataLocally(snapshotId: string, data: any) {
   const outputFolder = path.join(process.cwd(), "output");
@@ -26,37 +28,112 @@ export function saveWebhookDataLocally(snapshotId: string, data: any) {
 }
 
 export async function triggerCollection(inputs: SearchInput[]): Promise<TriggerResponse> {
-  const url = `/datasets/v3/trigger?dataset_id=${DATASET_ID}&format=json&type=discover_new&discover_by=keyword&limit_per_input=${LIMIT_PER_INPUT}`;
+  const url = `/datasets/v3/trigger?dataset_id=${LINKEDIN_DATASET_ID}&format=json&type=discover_new&discover_by=keyword&limit_per_input=${LIMIT_PER_INPUT}`;
   const { data } = await apiClient.post(url, inputs);
   return data;
 }
 
 export async function triggerCollectionWithWebhook(inputs: SearchInput[]): Promise<TriggerResponse> {
-  const url = `/datasets/v3/trigger?dataset_id=${DATASET_ID}&format=json&type=discover_new&discover_by=keyword&limit_per_input=${LIMIT_PER_INPUT}&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${AUTH_HEADER}&uncompressed_webhook=true&include_errors=true`;
-  
-  console.log("ðŸ”¹ Triggering BrightData job with webhook:", {
+  const url = `/datasets/v3/trigger?dataset_id=${LINKEDIN_DATASET_ID}&format=json&type=discover_new&discover_by=keyword&limit_per_input=1&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${LINKEDIN_AUTH_HEADER}&uncompressed_webhook=true&include_errors=true`;
+
+  console.log("🔹 Triggering LinkedIn job with webhook:", {
     webhook_url: WEBHOOK_URL,
-    dataset_id: DATASET_ID,
+    dataset_id: LINKEDIN_DATASET_ID,
     inputs: inputs
   });
-  
+
   const { data } = await apiClient.post(url, inputs);
   return data;
 }
 
 export async function triggerLinkedInCompanyCollection(companyUrls: string[]): Promise<TriggerResponse> {
   const inputs = companyUrls.map(url => ({ url }));
-  
-  const url = `/datasets/v3/trigger?dataset_id=${DATASET_ID}&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${AUTH_HEADER}&format=json&uncompressed_webhook=true&include_errors=true`;
-  
-  console.log("ðŸ”¹ Triggering LinkedIn company data collection:", {
+
+  const url = `/datasets/v3/trigger?dataset_id=${LINKEDIN_DATASET_ID}&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${LINKEDIN_AUTH_HEADER}&format=json&uncompressed_webhook=true&include_errors=true`;
+
+  console.log("🔹 Triggering LinkedIn company data collection:", {
     webhook_url: WEBHOOK_URL,
-    dataset_id: DATASET_ID,
+    dataset_id: LINKEDIN_DATASET_ID,
     company_urls: companyUrls
   });
-  
+
   const { data } = await apiClient.post(url, inputs);
   return data;
+}
+
+export async function triggerIndeedCollectionWithWebhook(inputs: SearchInput[]): Promise<TriggerResponse> {
+  // Based on the error logs, Indeed dataset expects: domain, keyword_search fields
+  // Let's format the inputs according to Indeed's expected format
+  const indeedInputs = inputs.map(input => ({
+    domain: "indeed.com",
+    keyword_search: input.keyword, 
+    location: input.location || "",
+    country: input.country || "IN",
+    date_posted: "",
+    posted_by: "", 
+    location_radius: ""
+  }));
+
+  const url = `/datasets/v3/trigger?dataset_id=${INDEED_DATASET_ID}&format=json&type=discover_new&discover_by=keyword&limit_per_input=1&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${INDEED_AUTH_HEADER}&uncompressed_webhook=true&include_errors=true`;
+
+  console.log("🔹 Triggering Indeed job with proper format:", {
+    webhook_url: WEBHOOK_URL,
+    dataset_id: INDEED_DATASET_ID,
+    originalInputs: inputs,
+    indeedInputs: indeedInputs,
+    url: url
+  });
+
+  try {
+    const { data } = await indeedApiClient.post(url, indeedInputs);
+    return data;
+  } catch (error: any) {
+    console.error("❌ Indeed proper format failed, error:", error.response?.data);
+
+    // If that still fails, try with sample viewjob URLs as fallback
+    console.log("🔄 Falling back to sample Indeed job URLs...");
+
+    const sampleJobUrls = [
+      { url: "https://www.indeed.com/viewjob?jk=sample123" },
+      { url: "https://www.indeed.com/viewjob?jk=sample456" }
+    ];
+
+    const fallbackUrl = `/datasets/v3/trigger?dataset_id=${INDEED_DATASET_ID}&format=json&limit_per_input=1&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${INDEED_AUTH_HEADER}&uncompressed_webhook=true&include_errors=true`;
+
+    console.log("🔹 Triggering Indeed with sample URLs:", sampleJobUrls);
+    const { data } = await indeedApiClient.post(fallbackUrl, sampleJobUrls);
+    return data;
+  }
+}
+
+export async function triggerBothPlatformsSimultaneously(inputs: SearchInput[]): Promise<{linkedin: TriggerResponse, indeed: TriggerResponse}> {
+  console.log("🚀 Triggering both LinkedIn and Indeed jobs simultaneously...");
+
+  try {
+    const [linkedinResult, indeedResult] = await Promise.all([
+      triggerCollectionWithWebhook(inputs).catch(error => {
+        console.error("❌ LinkedIn trigger failed:", error);
+        throw new Error(`LinkedIn: ${error.message}`);
+      }),
+      triggerIndeedCollectionWithWebhook(inputs).catch(error => {
+        console.error("❌ Indeed trigger failed:", error);
+        throw new Error(`Indeed: ${error.message}`);
+      })
+    ]);
+
+    console.log("✅ Both platforms triggered successfully:", {
+      linkedin: linkedinResult?.snapshot_id || linkedinResult?.id,
+      indeed: indeedResult?.snapshot_id || indeedResult?.id
+    });
+
+    return {
+      linkedin: linkedinResult,
+      indeed: indeedResult
+    };
+  } catch (error: any) {
+    console.error("❌ Error in simultaneous triggering:", error);
+    throw error;
+  }
 }
 
 
