@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+
 // lucide-react isn't installed in this environment; use simple placeholders typed as any to avoid TS errors
 const IconPlaceholder = (props: any) => null as any;
 const Search: any = IconPlaceholder;
 const Database: any = IconPlaceholder;
 const Play: any = IconPlaceholder;
 const RefreshCw: any = IconPlaceholder;
-const Download: any = IconPlaceholder;
 const Trash2: any = IconPlaceholder;
 const Eye: any = IconPlaceholder;
 const Copy: any = IconPlaceholder;

@@ -5,6 +5,20 @@ import fs from 'fs';
 import path from 'path';
 import { Timestamp } from 'firebase-admin/firestore';
 
+function formatTimestamp(timestamp: Timestamp = Timestamp.now()): string {
+  const date = timestamp.toDate();
+  return date.toLocaleString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZoneName: 'short'
+  });
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method === 'GET') {
@@ -277,8 +291,4 @@ async function handleDeleteSnapshot(res: NextApiResponse, snapshotId: string, so
       details: error.message
     });
   }
-}
-
-function formatTimestamp(arg0: Timestamp): string {
-  throw new Error('Function not implemented.');
 }

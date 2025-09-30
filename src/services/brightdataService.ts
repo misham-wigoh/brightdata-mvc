@@ -5,10 +5,9 @@ import { SearchInput, TriggerResponse } from "../types/brightdata";
 
 const LINKEDIN_DATASET_ID = process.env.BRIGHTDATA_DATASET_ID!;
 const INDEED_DATASET_ID = process.env.INDEED_DATASET_ID!;
-const LIMIT_PER_INPUT = 2;
+const LIMIT_PER_INPUT = 30;
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 45 * 60 * 1000;
-
 const WEBHOOK_URL = process.env.WEBHOOK_URL || process.env.NGROK_WEBHOOK_URL || "http://localhost:3000/api/consume";
 const LINKEDIN_AUTH_HEADER = process.env.BRIGHTDATA_API_KEY;
 const INDEED_AUTH_HEADER = process.env.INDEED_API_KEY;
@@ -22,8 +21,8 @@ export function saveWebhookDataLocally(snapshotId: string, data: any) {
   const filename = `webhook_${snapshotId}_${Date.now()}.json`;
   const filePath = path.join(outputFolder, filename);
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  
-  console.log(`ðŸ“ Webhook data saved locally: ${filename}`);
+
+  console.log(`🔒 Webhook data saved locally: ${filename}`);
   return filePath;
 }
 
@@ -39,7 +38,7 @@ export async function triggerCollectionWithWebhook(inputs: SearchInput[]): Promi
   console.log("🔹 Triggering LinkedIn job with webhook:", {
     webhook_url: WEBHOOK_URL,
     dataset_id: LINKEDIN_DATASET_ID,
-    inputs: inputs,
+    inputs,
     limit_per_input: LIMIT_PER_INPUT
   });
 
@@ -49,7 +48,6 @@ export async function triggerCollectionWithWebhook(inputs: SearchInput[]): Promi
 
 export async function triggerLinkedInCompanyCollection(companyUrls: string[]): Promise<TriggerResponse> {
   const inputs = companyUrls.map(url => ({ url }));
-
   const url = `/datasets/v3/trigger?dataset_id=${LINKEDIN_DATASET_ID}&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${LINKEDIN_AUTH_HEADER}&format=json&uncompressed_webhook=true&include_errors=true`;
 
   console.log("🔹 Triggering LinkedIn company data collection:", {
@@ -63,8 +61,6 @@ export async function triggerLinkedInCompanyCollection(companyUrls: string[]): P
 }
 
 export async function triggerIndeedCollectionWithWebhook(inputs: SearchInput[]): Promise<TriggerResponse> {
-  // Based on the error logs, Indeed dataset expects: domain, keyword_search fields
-  // Let's format the inputs according to Indeed's expected format
   const indeedInputs = inputs.map(input => ({
     domain: "indeed.com",
     keyword_search: input.keyword,
@@ -81,8 +77,8 @@ export async function triggerIndeedCollectionWithWebhook(inputs: SearchInput[]):
     webhook_url: WEBHOOK_URL,
     dataset_id: INDEED_DATASET_ID,
     originalInputs: inputs,
-    indeedInputs: indeedInputs,
-    url: url
+    indeedInputs,
+    url
   });
 
   try {
@@ -90,8 +86,6 @@ export async function triggerIndeedCollectionWithWebhook(inputs: SearchInput[]):
     return data;
   } catch (error: any) {
     console.error("❌ Indeed proper format failed, error:", error.response?.data);
-
-    // If that still fails, try with sample viewjob URLs as fallback
     console.log("🔄 Falling back to sample Indeed job URLs...");
 
     const sampleJobUrls = [
@@ -110,43 +104,37 @@ export async function triggerIndeedCollectionWithWebhook(inputs: SearchInput[]):
 export async function triggerBothPlatformsSimultaneously(inputs: SearchInput[]): Promise<{linkedin: TriggerResponse, indeed: TriggerResponse}> {
   console.log("🚀 Triggering both LinkedIn and Indeed jobs simultaneously...");
 
-  try {
-    const [linkedinResult, indeedResult] = await Promise.all([
-      triggerCollectionWithWebhook(inputs).catch(error => {
-        console.error("❌ LinkedIn trigger failed:", error);
-        throw new Error(`LinkedIn: ${error.message}`);
-      }),
-      triggerIndeedCollectionWithWebhook(inputs).catch(error => {
-        console.error("❌ Indeed trigger failed:", error);
-        throw new Error(`Indeed: ${error.message}`);
-      })
-    ]);
+  const [linkedinResult, indeedResult] = await Promise.all([
+    triggerCollectionWithWebhook(inputs).catch(error => {
+      console.error("❌ LinkedIn trigger failed:", error);
+      throw new Error(`LinkedIn: ${error.message}`);
+    }),
+    triggerIndeedCollectionWithWebhook(inputs).catch(error => {
+      console.error("❌ Indeed trigger failed:", error);
+      throw new Error(`Indeed: ${error.message}`);
+    })
+  ]);
 
-    console.log("✅ Both platforms triggered successfully:", {
-      linkedin: linkedinResult?.snapshot_id || linkedinResult?.id,
-      indeed: indeedResult?.snapshot_id || indeedResult?.id
-    });
+  console.log("✅ Both platforms triggered successfully:", {
+    linkedin: linkedinResult?.snapshot_id || linkedinResult?.id,
+    indeed: indeedResult?.snapshot_id || indeedResult?.id
+  });
 
-    return {
-      linkedin: linkedinResult,
-      indeed: indeedResult
-    };
-  } catch (error: any) {
-    console.error("❌ Error in simultaneous triggering:", error);
-    throw error;
-  }
+  return {
+    linkedin: linkedinResult,
+    indeed: indeedResult
+  };
 }
-
 
 export async function fetchWebhookData(snapshotId: string): Promise<any[]> {
   try {
     const localData = getWebhookData(snapshotId);
-    if (localData && localData.length > 0) {
+    if (localData.length > 0) {
       return localData;
     }
 
-    console.log(`â„¹ï¸ To get data for snapshot ${snapshotId}, check: https://webhook.site/#!/a640096a-2c0a-4b6e-9b9d-5698098181bc`);
-    
+    console.log(`ℹ️ To get data for snapshot ${snapshotId}, check: https://webhook.site/#!/a640096a-2c0a-4b6e-9b9d-5698098181bc`);
+
     return [];
   } catch (error: any) {
     console.error("Error fetching webhook data:", error);
@@ -176,7 +164,9 @@ export async function downloadSnapshot(snapshotId: string): Promise<string> {
   const { data } = await apiClient.get(url, { responseType: "stream" });
 
   const outputFolder = path.join(process.cwd(), "output");
-  if (!fs.existsSync(outputFolder)) fs.mkdirSync(outputFolder, { recursive: true });
+  if (!fs.existsSync(outputFolder)) {
+    fs.mkdirSync(outputFolder, { recursive: true });
+  }
 
   const filename = `jobs_${snapshotId}_${Date.now()}.json`;
   const outPath = path.join(outputFolder, filename);
@@ -206,9 +196,7 @@ export function getWebhookData(snapshotId: string): any[] {
 
   console.log(`📁 Found ${files.length} files:`, files);
 
-  const webhookFiles = files.filter(f => f.startsWith(`webhook_${snapshotId}_`));
   const dataFiles = files.filter(f => f.startsWith(`data_${snapshotId}_`));
-
   if (dataFiles.length > 0) {
     const latestDataFile = dataFiles.sort().pop()!;
     const filePath = path.join(outputFolder, latestDataFile);
@@ -219,6 +207,7 @@ export function getWebhookData(snapshotId: string): any[] {
     return data;
   }
 
+  const webhookFiles = files.filter(f => f.startsWith(`webhook_${snapshotId}_`));
   if (webhookFiles.length > 0) {
     const latestWebhookFile = webhookFiles.sort().pop()!;
     const filePath = path.join(outputFolder, latestWebhookFile);
@@ -245,8 +234,6 @@ export function getAllSnapshots(): string[] {
   const snapshotIds = new Set<string>();
 
   files.forEach(file => {
-    // Match patterns like: webhook_s_mfzc1emnyl0qp3cm8_1758799913939.json
-    // Extract the snapshot ID including the "s_" prefix
     const match = file.match(/^(webhook|data)_(.+)_\d+\.json$/);
     if (match) {
       snapshotIds.add(match[2]);

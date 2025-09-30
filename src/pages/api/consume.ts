@@ -201,7 +201,7 @@ function extractJobDataFromPayload(payload: any): { data: any[], snapshotId: str
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Allow both POST and GET methods for testing
-  if (req.method !== 'POST' && req.method   !== 'GET') {
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ 
       error: 'Method not allowed',
       allowedMethods: ['POST', 'GET']
