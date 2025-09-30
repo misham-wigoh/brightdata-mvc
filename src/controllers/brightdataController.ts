@@ -9,7 +9,6 @@ import {
 } from "../services/brightdataService";
 import { firebaseJobService } from "../services/firebaseService";
 import { SearchInput } from "../types/brightdata";
-import { Timestamp } from 'firebase-admin/firestore';
 
 // Original function (polling-based) - DEPRECATED, use webhook version instead
 export async function runBrightDataJob(inputs: SearchInput[]) {
@@ -63,39 +62,12 @@ export async function runBrightDataJobWithWebhook(inputs: SearchInput[]) {
   if (!snapshotId) throw new Error("Invalid trigger response");
 
   console.log(`🔥 Job triggered successfully with webhook. Snapshot ID: ${snapshotId}`);
-  
-  // Save initial job record to Firebase with 'triggered' status
-  let firebaseDocId = null;
-  try {
-    firebaseDocId = await firebaseJobService.saveJobData({
-      snapshotId,
-      status: 'triggered',
-      jobType: 'job_search',
-      data: [],
-      metadata: {
-        triggeredAt: Timestamp.now(),
-        dataCount: 0,
-        webhookPayload: triggerResult
-      },
-      searchParams: {
-        keyword: inputs[0]?.keyword,
-        location: inputs[0]?.location,
-        country: inputs[0]?.country
-      }
-    });
-    
-    console.log(`🔥 Initial job record saved to Firebase: ${firebaseDocId}`);
-  } catch (firebaseError: any) {
-    console.error('❌ Failed to save initial job record to Firebase:', firebaseError.message);
-    // Continue processing even if Firebase fails
-  }
-  
-  return { 
-    direct: false, 
+
+  return {
+    direct: false,
     webhook: true,
     snapshotId,
-    firebaseDocId,
-    message: "Job triggered successfully. Results will be delivered via webhook and saved to Firebase.",
+    message: "Job triggered successfully. Results will be delivered via webhook and saved to Firebase when data is received.",
     status: "triggered"
   };
 }
@@ -118,37 +90,12 @@ export async function runLinkedInCompanyJob(companyUrls: string[]) {
   if (!snapshotId) throw new Error("Invalid trigger response");
 
   console.log(`🔥 LinkedIn company job triggered successfully. Snapshot ID: ${snapshotId}`);
-  
-  // Save initial job record to Firebase with 'triggered' status
-  let firebaseDocId = null;
-  try {
-    firebaseDocId = await firebaseJobService.saveJobData({
-      snapshotId,
-      status: 'triggered',
-      jobType: 'linkedin_company',
-      data: [],
-      metadata: {
-        triggeredAt: Timestamp.now(),
-        dataCount: 0,
-        webhookPayload: triggerResult
-      },
-      searchParams: {
-        companyUrls
-      }
-    });
-    
-    console.log(`🔥 Initial LinkedIn job record saved to Firebase: ${firebaseDocId}`);
-  } catch (firebaseError: any) {
-    console.error('❌ Failed to save initial LinkedIn job record to Firebase:', firebaseError.message);
-    // Continue processing even if Firebase fails
-  }
-  
+
   return {
     direct: false,
     webhook: true,
     snapshotId,
-    firebaseDocId,
-    message: "LinkedIn company data job triggered successfully. Results will be delivered via webhook and saved to Firebase.",
+    message: "LinkedIn company data job triggered successfully. Results will be delivered via webhook and saved to Firebase when data is received.",
     status: "triggered"
   };
 }
@@ -165,68 +112,18 @@ export async function runBothPlatformsSimultaneously(inputs: SearchInput[]) {
     throw new Error("Missing snapshot IDs from trigger responses");
   }
 
-  // Save initial job records to Firebase for both platforms
-  let linkedinFirebaseDocId = null;
-  let indeedFirebaseDocId = null;
-
-  try {
-    // Save LinkedIn job
-    linkedinFirebaseDocId = await firebaseJobService.saveJobData({
-      snapshotId: linkedinSnapshotId,
-      status: 'triggered',
-      jobType: 'linkedin_jobs',
-      data: [],
-      metadata: {
-        triggeredAt: Timestamp.now(),
-        dataCount: 0,
-        webhookPayload: linkedin,
-        platform: 'linkedin'
-      } as any,
-      searchParams: {
-        keyword: inputs[0]?.keyword,
-        location: inputs[0]?.location,
-        country: inputs[0]?.country
-      }
-    });
-
-    // Save Indeed job
-    indeedFirebaseDocId = await firebaseJobService.saveJobData({
-      snapshotId: indeedSnapshotId,
-      status: 'triggered',
-      jobType: 'indeed_jobs',
-      data: [],
-      metadata: {
-        triggeredAt: Timestamp.now(),
-        dataCount: 0,
-        webhookPayload: indeed,
-        platform: 'indeed'
-      } as any,
-      searchParams: {
-        keyword: inputs[0]?.keyword,
-        location: inputs[0]?.location,
-        country: inputs[0]?.country
-      }
-    });
-
-    console.log(`✅ Both jobs saved to Firebase - LinkedIn: ${linkedinFirebaseDocId}, Indeed: ${indeedFirebaseDocId}`);
-  } catch (firebaseError: any) {
-    console.error('❌ Failed to save job records to Firebase:', firebaseError.message);
-  }
-
   return {
     linkedin: {
       snapshotId: linkedinSnapshotId,
-      firebaseDocId: linkedinFirebaseDocId,
       status: "triggered",
       platform: "linkedin"
     },
     indeed: {
       snapshotId: indeedSnapshotId,
-      firebaseDocId: indeedFirebaseDocId,
       status: "triggered",
       platform: "indeed"
     },
-    message: "Both LinkedIn and Indeed jobs triggered successfully. Results will be delivered via webhooks and saved to Firebase.",
+    message: "Both LinkedIn and Indeed jobs triggered successfully. Results will be delivered via webhooks and saved to Firebase when data is received.",
     webhook: true,
     simultaneous: true
   };

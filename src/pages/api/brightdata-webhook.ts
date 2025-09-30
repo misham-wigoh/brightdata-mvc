@@ -53,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           job_search: {
             type: "job_search",
             keyword: "optional (default: public health jobs)",
-            location: "optional (default: Chennai)", 
+            location: "optional (default: All major Indian cities)", 
             country: "optional (default: IN)"
           },
           linkedin_companies: {
@@ -82,7 +82,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         example: {
           type: "job_search",
           keyword: "public health jobs",
-          location: "Chennai",
+          location: "All major Indian cities",
           country: "IN"
         }
       });
@@ -95,7 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         try {
           // Use defaults for missing parameters
           const keyword = requestBody.keyword || "public health jobs";
-          const location = requestBody.location || "Chennai";
+          const location = requestBody.location || "Chennai, Bangalore, Mumbai, Delhi, Kolkata, Hyderabad, Ahmedabad, Pune, Surat, Jaipur, Lucknow, Kanpur, Nagpur, Indore, Thane, Bhopal, Visakhapatnam, Pimpri-Chinchwad, Patna, Vadodara, Ghaziabad, Ludhiana, Agra, Nashik, Faridabad, Meerut, Rajkot, Kalyan-Dombivli, Vasai-Virar, Varanasi, Srinagar, Aurangabad, Dhanbad, Amritsar, Navi Mumbai, Allahabad, Ranchi, Howrah, Coimbatore, Jabalpur, Gwalior, Vijayawada, Jodhpur, Madurai, Raipur, Kota, Guwahati, Chandigarh, Solapur, Hubballi-Dharwad, Tiruchirappalli, Bareilly, Mysore, Tiruppur, Gurgaon, Aligarh, Jalandhar, Bhubaneswar, Salem, Warangal, Guntur, Bhiwandi, Saharanpur, Gorakhpur, Bikaner, Amravati, Noida, Jamshedpur, Bhilai, Cuttack, Firozabad, Kochi, Nellore, Bhavnagar, Dehradun, Durgapur, Asansol, Rourkela, Nanded, Kolhapur, Ajmer, Akola, Gulbarga, Jamnagar, Ujjain, Loni, Siliguri, Jhansi, Ulhasnagar, Jammu, Sangli-Miraj & Kupwad, Mangalore, Erode, Belgaum, Ambattur, Tirunelveli, Malegaon, Gaya, Jalgaon, Udaipur, Maheshtala, Davanagere, Kozhikode, Kurnool, Rajpur Sonarpur, Rajahmundry, Bokaro, South Dumdum, Bellary, Patiala, Gopalpur, Agartala, Bhagalpur, Muzaffarnagar, Bhatpara, Panihati, Latur, Dhule, Rohtak, Korba, Bhilwara, Berhampur, Muzaffarpur, Ahmednagar, Mathura, Kollam, Avadi, Kadapa, Kamarhati, Sambalpur, Bilaspur, Shahjahanpur, Satara, Bijapur, Rampur, Shivamogga, Chandrapur, Junagadh, Thrissur, Alwar, Bardhaman, Kulti, Kakinada, Nizamabad, Parbhani, Tumkur, Khammam, Ozhukarai, Bihar Sharif, Panipat, Darbhanga, Bally, Aizawl, Dewas, Ichalkaranji, Karnal, Bathinda, Jalna, Eluru, Kirari Suleman Nagar, Barabanki, Purnia, Satna, Mau, Sonipat, Farrukhabad, Sagar, Ratlam, Hapur, Arrah, Karimnagar, Anantapur, Etawah, Ambernath, North Dumdum, Bharatpur, Begusarai, New Delhi, Gandhidham, Baranagar, Tiruvottiyur, Puducherry, Sikar, Thoothukudi, Rewa, Mirzapur, Raichur, Pali, Ramagundam, Haridwar, Vijayanagaram, Katihar, Nagarcoil, Sri Ganganagar, Karawal Nagar, Mango, Thanjavur, Bulandshahr, Uluberia, Murwara, Sambhal, Singrauli, Nadiad, Secunderabad, Naihati, Yamunanagar, Bidhan Nagar, Pallavaram, Bidar, Munger, Panchkula, Burhanpur, Raurkela Industrial Township, Kharagpur, Dindigul, Gandhinagar, Hospet, Nangloi Jat, Malda, Ongole, Deoghar, Chapra, Haldia, Khandwa, Nandyal, Chittoor, Morena, Amroha, Anand, Bhind, Bhalswa Jahangir Pur, Madhyamgram, Bhiwani, Navi Mumbai Panvel Raigad, Baharampur, Ambala, Morvi, Fatehpur, Rae Bareli, Khora, Bhusawal, Orai, Bahraich, Vellore, Mahesana, Raiganj, Sirsa, Danapur, Serampore, Sultan Pur Majra, Guna, Jaunpur, Panvel, Shivpuri, Surendranagar Dudhrej, Vapi, Ernakulam, Kannur, Thrissur, Alappuzha, Malappuram, Palakkad, Kasaragod, Pathanamthitta, Idukki, Wayanad, Thiruvananthapuram, Kottayam";
           const country = requestBody.country || "IN";
 
           const inputs = [{ keyword, location, country }];
@@ -124,7 +124,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         try {
           // Use defaults for missing parameters
           const keyword = requestBody.keyword || "public health jobs";
-          const location = requestBody.location || "Chennai";
+          const location = requestBody.location || "Chennai, Bangalore, Mumbai, Delhi, Kolkata, Hyderabad, Ahmedabad, Pune, Surat, Jaipur, Lucknow, Kanpur, Nagpur, Indore, Thane, Bhopal, Visakhapatnam, Pimpri-Chinchwad, Patna, Vadodara, Ghaziabad, Ludhiana, Agra, Nashik, Faridabad, Meerut, Rajkot, Kalyan-Dombivli, Vasai-Virar, Varanasi, Srinagar, Aurangabad, Dhanbad, Amritsar, Navi Mumbai, Allahabad, Ranchi, Howrah, Coimbatore, Jabalpur, Gwalior, Vijayawada, Jodhpur, Madurai, Raipur, Kota, Guwahati, Chandigarh, Solapur, Hubballi-Dharwad, Tiruchirappalli, Bareilly, Mysore, Tiruppur, Gurgaon, Aligarh, Jalandhar, Bhubaneswar, Salem, Warangal, Guntur, Bhiwandi, Saharanpur, Gorakhpur, Bikaner, Amravati, Noida, Jamshedpur, Bhilai, Cuttack, Firozabad, Kochi, Nellore, Bhavnagar, Dehradun, Durgapur, Asansol, Rourkela, Nanded, Kolhapur, Ajmer, Akola, Gulbarga, Jamnagar, Ujjain, Loni, Siliguri, Jhansi, Ulhasnagar, Jammu, Sangli-Miraj & Kupwad, Mangalore, Erode, Belgaum, Ambattur, Tirunelveli, Malegaon, Gaya, Jalgaon, Udaipur, Maheshtala, Davanagere, Kozhikode, Kurnool, Rajpur Sonarpur, Rajahmundry, Bokaro, South Dumdum, Bellary, Patiala, Gopalpur, Agartala, Bhagalpur, Muzaffarnagar, Bhatpara, Panihati, Latur, Dhule, Rohtak, Korba, Bhilwara, Berhampur, Muzaffarpur, Ahmednagar, Mathura, Kollam, Avadi, Kadapa, Kamarhati, Sambalpur, Bilaspur, Shahjahanpur, Satara, Bijapur, Rampur, Shivamogga, Chandrapur, Junagadh, Thrissur, Alwar, Bardhaman, Kulti, Kakinada, Nizamabad, Parbhani, Tumkur, Khammam, Ozhukarai, Bihar Sharif, Panipat, Darbhanga, Bally, Aizawl, Dewas, Ichalkaranji, Karnal, Bathinda, Jalna, Eluru, Kirari Suleman Nagar, Barabanki, Purnia, Satna, Mau, Sonipat, Farrukhabad, Sagar, Ratlam, Hapur, Arrah, Karimnagar, Anantapur, Etawah, Ambernath, North Dumdum, Bharatpur, Begusarai, New Delhi, Gandhidham, Baranagar, Tiruvottiyur, Puducherry, Sikar, Thoothukudi, Rewa, Mirzapur, Raichur, Pali, Ramagundam, Haridwar, Vijayanagaram, Katihar, Nagarcoil, Sri Ganganagar, Karawal Nagar, Mango, Thanjavur, Bulandshahr, Uluberia, Murwara, Sambhal, Singrauli, Nadiad, Secunderabad, Naihati, Yamunanagar, Bidhan Nagar, Pallavaram, Bidar, Munger, Panchkula, Burhanpur, Raurkela Industrial Township, Kharagpur, Dindigul, Gandhinagar, Hospet, Nangloi Jat, Malda, Ongole, Deoghar, Chapra, Haldia, Khandwa, Nandyal, Chittoor, Morena, Amroha, Anand, Bhind, Bhalswa Jahangir Pur, Madhyamgram, Bhiwani, Navi Mumbai Panvel Raigad, Baharampur, Ambala, Morvi, Fatehpur, Rae Bareli, Khora, Bhusawal, Orai, Bahraich, Vellore, Mahesana, Raiganj, Sirsa, Danapur, Serampore, Sultan Pur Majra, Guna, Jaunpur, Panvel, Shivpuri, Surendranagar Dudhrej, Vapi, Ernakulam, Kannur, Thrissur, Alappuzha, Malappuram, Palakkad, Kasaragod, Pathanamthitta, Idukki, Wayanad, Thiruvananthapuram, Kottayam";
           const country = requestBody.country || "IN";
 
           const inputs = [{ keyword, location, country }];

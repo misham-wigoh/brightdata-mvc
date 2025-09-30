@@ -268,9 +268,9 @@ const BrightDataDashboard: React.FC = () => {
                                             <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
                                             <input
                                                 type="text"
-                                                value={jobForm.location}
-                                                onChange={(e) => setJobForm(prev => ({ ...prev, location: e.target.value }))}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    value={jobForm.location}
+                                                    onChange={(e) => setJobForm(prev => ({ ...prev, location: e.target.value }))}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 placeholder="e.g., Chennai, Bangalore, Mumbai, Delhi"
                                             />
                                             <p className="text-xs text-gray-500 mt-1">

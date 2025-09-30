@@ -5,11 +5,50 @@ import path from 'path';
 import { firebaseJobService } from '../../services/firebaseService';
 import { Timestamp } from 'firebase-admin/firestore';
 
+/**
+ * Format Timestamp to readable string: "September 29, 2025 at 5:55:31 PM UTC+5:30"
+ */
+function formatTimestamp(timestamp: Timestamp = Timestamp.now()): string {
+  const date = timestamp.toDate();
+  return date.toLocaleString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZoneName: 'short'
+  });
+}
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '1gb',
+    },
+  },
+};
+
 // Helper function to determine job type from data
 function determineJobType(data: any[]): string {
   if (!data || data.length === 0) return 'unknown';
 
   const firstItem = data[0];
+  console.log('🔍 Analyzing first item for job type detection:', {
+    hasUrl: !!firstItem.url,
+    url: firstItem.url?.substring(0, 50),
+    hasDomain: !!firstItem.domain,
+    domain: firstItem.domain,
+    hasJobUrl: !!firstItem.job_url,
+    jobUrl: firstItem.job_url?.substring(0, 50),
+    hasDiscoveryInput: !!firstItem.discovery_input,
+    discoveryInputDomain: firstItem.discovery_input?.domain,
+    hasJobTitle: !!firstItem.job_title,
+    hasCompany: !!firstItem.company,
+    hasCompanyName: !!firstItem.company_name,
+    allKeys: Object.keys(firstItem)
+  });
 
   // Check if it's Indeed job data FIRST (based on domain field or URL patterns)
   if (
@@ -17,8 +56,10 @@ function determineJobType(data: any[]): string {
     firstItem.url?.includes('indeed.com') ||
     firstItem.job_url?.includes('indeed.com') ||
     firstItem.company_link?.includes('indeed.com') ||
-    (firstItem.discovery_input && firstItem.discovery_input.domain === 'indeed.com')
+    (firstItem.discovery_input && firstItem.discovery_input.domain === 'indeed.com') ||
+    (firstItem.input && firstItem.input.domain === 'indeed.com')
   ) {
+    console.log('✓ Detected Indeed job data');
     return 'indeed_jobs';
   }
 
@@ -30,6 +71,7 @@ function determineJobType(data: any[]): string {
     firstItem.job_posting_id || // LinkedIn has job_posting_id
     (firstItem.url && firstItem.url.includes('linkedin.com') && !firstItem.url.includes('company'))
   ) {
+    console.log('✓ Detected LinkedIn job data');
     return 'linkedin_jobs';
   }
 
@@ -39,47 +81,62 @@ function determineJobType(data: any[]): string {
     (firstItem.company_url && firstItem.company_url.includes('linkedin.com/company')) ||
     (firstItem.url && firstItem.url.includes('linkedin.com/company'))
   ) {
+    console.log('✓ Detected LinkedIn company data');
     return 'linkedin_company';
   }
 
   // Generic job search data (fallback)
   if (firstItem.job_title || firstItem.company_name || firstItem.company) {
+    console.log('✓ Detected generic job search data');
     return 'job_search';
   }
 
+  console.log('⚠️ Could not determine job type, defaulting to unknown');
   return 'unknown';
 }
 
 // Helper function to extract search parameters from job data
 function extractSearchParams(data: any[], jobType: string): any {
   const searchParams: any = {};
-  
-  if (jobType === 'job_search' && data && data.length > 0) {
+  console.log(`🔍 Extracting search params for job type: ${jobType}`);
+
+  if ((jobType === 'job_search' || jobType === 'indeed_jobs' || jobType === 'linkedin_jobs') && data && data.length > 0) {
     // Extract search params from discovery_input or input
     const firstJob = data[0];
-    
+
     if (firstJob.discovery_input) {
       searchParams.keyword = firstJob.discovery_input.keyword;
       searchParams.location = firstJob.discovery_input.location;
       searchParams.country = firstJob.discovery_input.country;
+      console.log('✓ Extracted params from discovery_input:', searchParams);
     } else if (firstJob.input?.discovery_input) {
       searchParams.keyword = firstJob.input.discovery_input.keyword;
       searchParams.location = firstJob.input.discovery_input.location;
       searchParams.country = firstJob.input.discovery_input.country;
+      console.log('✓ Extracted params from input.discovery_input:', searchParams);
+    } else if (firstJob.input) {
+      // For Indeed data, might be directly in input
+      searchParams.keyword = firstJob.input.keyword_search || firstJob.input.keyword;
+      searchParams.location = firstJob.input.location;
+      searchParams.country = firstJob.input.country;
+      searchParams.domain = firstJob.input.domain;
+      console.log('✓ Extracted params from direct input:', searchParams);
     }
   }
-  
+
   if (jobType === 'linkedin_company' && data && data.length > 0) {
     // Extract company URLs
     const companyUrls = data
       .map((item: any) => item.linkedin_url || item.company_url || item.url)
       .filter((url: string) => url);
-    
+
     if (companyUrls.length > 0) {
       searchParams.companyUrls = companyUrls;
+      console.log(`✓ Extracted ${companyUrls.length} company URLs`);
     }
   }
-  
+
+  console.log('Final extracted search params:', searchParams);
   return searchParams;
 }
 
@@ -228,8 +285,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const webhookPath = path.join(outputFolder, webhookFilename);
     fs.writeFileSync(webhookPath, JSON.stringify(payload, null, 2));
 
-    let savedFiles: any = { webhook: webhookFilename };
-    let dataCount = dataArray.length;
+    const savedFiles: Record<string, string> = { webhook: webhookFilename };
+    const dataCount = dataArray.length;
 
     // If we have job data, save it separately and prepare for Firebase
     let jobData = null;
@@ -259,11 +316,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         jobType,
         data: dataArray,
         metadata: {
-          triggeredAt: Timestamp.now(), // Will be updated if existing record found
-          completedAt: Timestamp.now(),
+          triggeredAt: formatTimestamp(Timestamp.now()), // Will be updated if existing record found
+          completedAt: formatTimestamp(Timestamp.now()),
           dataCount,
           webhookPayload: payload,
-          processedAt: Timestamp.now()
+          processedAt: formatTimestamp(Timestamp.now())
         },
         searchParams
       };
@@ -293,14 +350,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             data: jobData.data,
             metadata: {
               ...existingJob.metadata,
-              completedAt: Timestamp.now(),
+              completedAt: formatTimestamp(Timestamp.now()),
               dataCount: jobData.data.length,
               webhookPayload: jobData.metadata.webhookPayload,
-              processedAt: Timestamp.now()
+              processedAt: formatTimestamp(Timestamp.now())
             }
           };
 
-          await firebaseJobService.updateJobData(existingJob.id!, updateData);
+          await firebaseJobService.updateJobData(existingJob.id!, updateData, existingJob.jobType);
           firebaseDocId = existingJob.id;
           console.log(`✅ Updated existing Firebase record: ${firebaseDocId} with ${jobData.data.length} records`);
           
@@ -323,11 +380,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           metadata: {
             ...existingJob.metadata,
             webhookPayload: payload,
-            lastStatusUpdate: Timestamp.now()
+            lastStatusUpdate: formatTimestamp(Timestamp.now())
           }
         };
 
-        await firebaseJobService.updateJobData(existingJob.id!, statusUpdate);
+        await firebaseJobService.updateJobData(existingJob.id!, statusUpdate, existingJob.jobType);
         firebaseDocId = existingJob.id;
         console.log(`📊 Updated status for existing job: ${firebaseDocId} to ${statusUpdate.status}`);
       } catch (error: any) {

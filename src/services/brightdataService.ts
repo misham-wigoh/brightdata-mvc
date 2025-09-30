@@ -7,7 +7,7 @@ const LINKEDIN_DATASET_ID = process.env.BRIGHTDATA_DATASET_ID!;
 const INDEED_DATASET_ID = process.env.INDEED_DATASET_ID!;
 const LIMIT_PER_INPUT = 2;
 const POLL_INTERVAL_MS = 3000;
-const POLL_TIMEOUT_MS = 15 * 60 * 1000;
+const POLL_TIMEOUT_MS = 45 * 60 * 1000;
 
 const WEBHOOK_URL = process.env.WEBHOOK_URL || process.env.NGROK_WEBHOOK_URL || "http://localhost:3000/api/consume";
 const LINKEDIN_AUTH_HEADER = process.env.BRIGHTDATA_API_KEY;
@@ -34,12 +34,13 @@ export async function triggerCollection(inputs: SearchInput[]): Promise<TriggerR
 }
 
 export async function triggerCollectionWithWebhook(inputs: SearchInput[]): Promise<TriggerResponse> {
-  const url = `/datasets/v3/trigger?dataset_id=${LINKEDIN_DATASET_ID}&format=json&type=discover_new&discover_by=keyword&limit_per_input=1&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${LINKEDIN_AUTH_HEADER}&uncompressed_webhook=true&include_errors=true`;
+  const url = `/datasets/v3/trigger?dataset_id=${LINKEDIN_DATASET_ID}&format=json&type=discover_new&discover_by=keyword&limit_per_input=${LIMIT_PER_INPUT}&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${LINKEDIN_AUTH_HEADER}&uncompressed_webhook=true&include_errors=true`;
 
   console.log("🔹 Triggering LinkedIn job with webhook:", {
     webhook_url: WEBHOOK_URL,
     dataset_id: LINKEDIN_DATASET_ID,
-    inputs: inputs
+    inputs: inputs,
+    limit_per_input: LIMIT_PER_INPUT
   });
 
   const { data } = await apiClient.post(url, inputs);
@@ -66,15 +67,15 @@ export async function triggerIndeedCollectionWithWebhook(inputs: SearchInput[]):
   // Let's format the inputs according to Indeed's expected format
   const indeedInputs = inputs.map(input => ({
     domain: "indeed.com",
-    keyword_search: input.keyword, 
+    keyword_search: input.keyword,
     location: input.location || "",
     country: input.country || "IN",
     date_posted: "",
-    posted_by: "", 
+    posted_by: "",
     location_radius: ""
   }));
 
-  const url = `/datasets/v3/trigger?dataset_id=${INDEED_DATASET_ID}&format=json&type=discover_new&discover_by=keyword&limit_per_input=1&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${INDEED_AUTH_HEADER}&uncompressed_webhook=true&include_errors=true`;
+  const url = `/datasets/v3/trigger?dataset_id=${INDEED_DATASET_ID}&format=json&type=discover_new&discover_by=keyword&limit_per_input=${LIMIT_PER_INPUT}&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${INDEED_AUTH_HEADER}&uncompressed_webhook=true&include_errors=true`;
 
   console.log("🔹 Triggering Indeed job with proper format:", {
     webhook_url: WEBHOOK_URL,
@@ -98,7 +99,7 @@ export async function triggerIndeedCollectionWithWebhook(inputs: SearchInput[]):
       { url: "https://www.indeed.com/viewjob?jk=sample456" }
     ];
 
-    const fallbackUrl = `/datasets/v3/trigger?dataset_id=${INDEED_DATASET_ID}&format=json&limit_per_input=1&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${INDEED_AUTH_HEADER}&uncompressed_webhook=true&include_errors=true`;
+    const fallbackUrl = `/datasets/v3/trigger?dataset_id=${INDEED_DATASET_ID}&format=json&limit_per_input=${LIMIT_PER_INPUT}&endpoint=${encodeURIComponent(WEBHOOK_URL)}&auth_header=${INDEED_AUTH_HEADER}&uncompressed_webhook=true&include_errors=true`;
 
     console.log("🔹 Triggering Indeed with sample URLs:", sampleJobUrls);
     const { data } = await indeedApiClient.post(fallbackUrl, sampleJobUrls);
@@ -191,52 +192,67 @@ export async function downloadSnapshot(snapshotId: string): Promise<string> {
 
 export function getWebhookData(snapshotId: string): any[] {
   const outputFolder = path.join(process.cwd(), "output");
-  
+
   if (!fs.existsSync(outputFolder)) {
+    console.log('❌ Output folder does not exist');
     return [];
   }
-  
-  const files = fs.readdirSync(outputFolder).filter(f => 
+
+  console.log(`🔍 Looking for data files for snapshot: ${snapshotId}`);
+
+  const files = fs.readdirSync(outputFolder).filter(f =>
     f.startsWith(`webhook_${snapshotId}_`) || f.startsWith(`data_${snapshotId}_`)
   );
-  
+
+  console.log(`📁 Found ${files.length} files:`, files);
+
   const webhookFiles = files.filter(f => f.startsWith(`webhook_${snapshotId}_`));
   const dataFiles = files.filter(f => f.startsWith(`data_${snapshotId}_`));
-  
+
   if (dataFiles.length > 0) {
     const latestDataFile = dataFiles.sort().pop()!;
     const filePath = path.join(outputFolder, latestDataFile);
+    console.log(`📄 Reading data file: ${latestDataFile}`);
     const content = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(content);
+    const data = JSON.parse(content);
+    console.log(`✅ Successfully loaded ${data.length} records from data file`);
+    return data;
   }
 
   if (webhookFiles.length > 0) {
     const latestWebhookFile = webhookFiles.sort().pop()!;
     const filePath = path.join(outputFolder, latestWebhookFile);
+    console.log(`📄 Reading webhook file: ${latestWebhookFile}`);
     const content = fs.readFileSync(filePath, 'utf8');
     const webhook = JSON.parse(content);
-    return webhook.data || [];
+    const data = webhook.data || [];
+    console.log(`✅ Successfully loaded ${data.length} records from webhook file`);
+    return data;
   }
-  
+
+  console.log('⚠️ No data found for snapshot');
   return [];
 }
 
 export function getAllSnapshots(): string[] {
   const outputFolder = path.join(process.cwd(), "output");
-  
+
   if (!fs.existsSync(outputFolder)) {
     return [];
   }
-  
+
   const files = fs.readdirSync(outputFolder);
   const snapshotIds = new Set<string>();
-  
+
   files.forEach(file => {
-    const match = file.match(/^(webhook|data)_([^_]+)_/);
+    // Match patterns like: webhook_s_mfzc1emnyl0qp3cm8_1758799913939.json
+    // Extract the snapshot ID including the "s_" prefix
+    const match = file.match(/^(webhook|data)_(.+)_\d+\.json$/);
     if (match) {
       snapshotIds.add(match[2]);
     }
   });
-  
+
+  console.log('📊 getAllSnapshots found:', Array.from(snapshotIds));
   return Array.from(snapshotIds);
 }

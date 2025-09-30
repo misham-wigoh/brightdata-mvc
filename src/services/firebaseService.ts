@@ -2,6 +2,23 @@
 import { db } from '../lib/firebase';
 import { Timestamp } from 'firebase-admin/firestore';
 
+/**
+ * Format Timestamp to readable string: "September 29, 2025 at 5:55:31 PM UTC+5:30"
+ */
+function formatTimestamp(timestamp: Timestamp = Timestamp.now()): string {
+  const date = timestamp.toDate();
+  return date.toLocaleString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZoneName: 'short'
+  });
+}
+
 export interface JobData {
   id?: string;
   snapshotId: string;
@@ -9,15 +26,15 @@ export interface JobData {
   jobType: string;
   data: any[];
   metadata: {
-    triggeredAt: Timestamp;
-    completedAt?: Timestamp;
+    triggeredAt: string;
+    completedAt?: string;
     dataCount: number;
     webhookPayload?: any;
     error?: string;
-    updatedAt?: Timestamp;
-    processedAt?: Timestamp;
-    lastStatusUpdate?: Timestamp;
-    fixedAt?: Timestamp;
+    updatedAt?: string;
+    processedAt?: string;
+    lastStatusUpdate?: string;
+    fixedAt?: string;
   };
   searchParams?: {
     keyword?: string;
@@ -25,54 +42,130 @@ export interface JobData {
     country?: string;
     companyUrls?: string[];
   };
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export class FirebaseJobService {
-  private collection = db.collection('brightdata_jobs');
+  private linkedinCollection = db.collection('linkedin_jobs');
+  private indeedCollection = db.collection('indeed_jobs');
+
+  /**
+   * Clean undefined values from object (Firestore doesn't allow undefined)
+   */
+  private cleanUndefinedValues(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return {};
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.cleanUndefinedValues(item)).filter(item => item !== undefined);
+    }
+
+    if (typeof obj === 'object') {
+      const cleaned: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined && value !== null) {
+          const cleanedValue = this.cleanUndefinedValues(value);
+          if (cleanedValue !== undefined && cleanedValue !== null &&
+              !(typeof cleanedValue === 'object' && Object.keys(cleanedValue).length === 0)) {
+            cleaned[key] = cleanedValue;
+          }
+        }
+      }
+      return cleaned;
+    }
+
+    return obj;
+  }
+
+  /**
+   * Get the appropriate collection based on job type
+   */
+  private getCollection(jobType: string) {
+    switch (jobType?.toLowerCase()) {
+      case 'linkedin_jobs':
+      case 'linkedin':
+        return this.linkedinCollection;
+      case 'indeed_jobs':
+      case 'indeed':
+        return this.indeedCollection;
+      default:
+        throw new Error(`Unknown job type: ${jobType}. Expected 'linkedin_jobs' or 'indeed_jobs'`);
+    }
+  }
+
 
   /**
    * Save job data to Firebase with improved error handling
    */
   async saveJobData(jobData: Partial<JobData>): Promise<string> {
     try {
-      const now = Timestamp.now();
-      
+      const now = formatTimestamp(Timestamp.now());
+
       // Ensure data array is not null/undefined
       const dataArray = Array.isArray(jobData.data) ? jobData.data : [];
-      
+
+      // Debug incoming data structure
+      console.log('📥 Incoming job data structure:', {
+        hasData: !!jobData.data,
+        dataLength: dataArray.length,
+        snapshotId: jobData.snapshotId,
+        jobType: jobData.jobType,
+        hasSearchParams: !!jobData.searchParams,
+        searchParamsKeys: Object.keys(jobData.searchParams || {}),
+        searchParamsValues: jobData.searchParams
+      });
+
+      // Prepare document data
       const docData: JobData = {
         snapshotId: jobData.snapshotId!,
         status: jobData.status || 'completed',
         jobType: jobData.jobType || 'unknown',
         data: dataArray,
-        metadata: {
+        metadata: this.cleanUndefinedValues({
           triggeredAt: jobData.metadata?.triggeredAt || now,
           completedAt: jobData.metadata?.completedAt || now,
-          dataCount: dataArray.length, // Use actual array length
+          dataCount: dataArray.length,
           webhookPayload: jobData.metadata?.webhookPayload,
           processedAt: now,
-          ...jobData.metadata // Spread any additional metadata
-        },
-        searchParams: jobData.searchParams || {},
+          ...jobData.metadata
+        }),
+        searchParams: this.cleanUndefinedValues(jobData.searchParams || {}),
         createdAt: jobData.createdAt || now,
         updatedAt: now
       };
 
-      // Log data being saved for debugging
       console.log('🔍 Saving to Firebase:', {
-        snapshotId: docData.snapshotId,
-        status: docData.status,
-        jobType: docData.jobType,
-        dataCount: docData.metadata.dataCount,
-        actualArrayLength: docData.data.length,
-        hasSearchParams: Object.keys(docData.searchParams || {}).length > 0
+        snapshotId: jobData.snapshotId,
+        status: jobData.status,
+        jobType: jobData.jobType,
+        dataCount: dataArray.length
       });
 
-      const docRef = await this.collection.add(docData);
-      
-      console.log(`✅ Job data saved to Firebase with ID: ${docRef.id} (${docData.metadata.dataCount} records)`);
+      // Clean undefined values before saving
+      console.log('🧹 Cleaning document data...');
+      const cleanedDocData = this.cleanUndefinedValues(docData);
+
+      // Debug log to check for undefined values
+      console.log('🔍 Cleaned document sample:', {
+        snapshotId: cleanedDocData.snapshotId,
+        jobType: cleanedDocData.jobType,
+        searchParams: cleanedDocData.searchParams,
+        metadataKeys: Object.keys(cleanedDocData.metadata || {}),
+        hasUndefinedInSearchParams: Object.values(cleanedDocData.searchParams || {}).some(v => v === undefined)
+      });
+
+      // Get the appropriate collection based on job type
+      const targetCollection = this.getCollection(cleanedDocData.jobType);
+
+      console.log(`🎯 Saving to collection: ${cleanedDocData.jobType} → ${targetCollection.id}`);
+
+      // Create the main document
+      const docRef = await targetCollection.add(cleanedDocData);
+
+      console.log(`✅ Job data saved to Firebase with ID: ${docRef.id} (${dataArray.length} records)`);
+
       return docRef.id;
     } catch (error: any) {
       console.error('❌ Error saving job data to Firebase:', error);
@@ -88,35 +181,40 @@ export class FirebaseJobService {
   /**
    * Update existing job data with improved data handling
    */
-  async updateJobData(docId: string, updateData: Partial<JobData>): Promise<void> {
+  async updateJobData(docId: string, updateData: Partial<JobData>, jobType: string): Promise<void> {
     try {
-      const now = Timestamp.now();
-      
-      // If updating data array, ensure proper count
+      const now = formatTimestamp(Timestamp.now());
+
+      // Get current document from the appropriate collection
+      const collection = this.getCollection(jobType);
+      const docRef = collection.doc(docId);
+      const docSnapshot = await docRef.get();
+
+      if (!docSnapshot.exists) {
+        throw new Error(`Document ${docId} not found`);
+      }
+
       const updates: any = {
         ...updateData,
         updatedAt: now
       };
 
-      // Update dataCount if data array is being updated
+      // Handle data array updates
       if (Array.isArray(updateData.data)) {
+        console.log(`🔍 Updating Firebase doc ${docId}:`, {
+          newDataCount: updateData.data.length
+        });
+
         updates.data = updateData.data;
-        if (updates.metadata) {
-          updates.metadata.dataCount = updateData.data.length;
-        } else {
-          updates['metadata.dataCount'] = updateData.data.length;
-        }
+        updates.metadata = {
+          ...updates.metadata,
+          dataCount: updateData.data.length
+        };
       }
 
-      console.log(`🔍 Updating Firebase doc ${docId}:`, {
-        hasData: !!updateData.data,
-        dataCount: Array.isArray(updateData.data) ? updateData.data.length : 'unchanged',
-        status: updateData.status || 'unchanged'
-      });
-      
-      await this.collection.doc(docId).update(updates);
-      
-      console.log(`✅ Job data updated in Firebase: ${docId}`);
+      await docRef.update(updates);
+
+      console.log(`✅ Job data updated in Firebase: ${docId} (${updates.metadata?.dataCount || 'no data changes'} records)`);
     } catch (error: any) {
       console.error('❌ Error updating job data in Firebase:', error);
       console.error('Update data:', updateData);
@@ -125,94 +223,56 @@ export class FirebaseJobService {
   }
 
   /**
-   * Get job data by snapshot ID with better logging
+   * Get job data by snapshot ID with better logging - searches all collections
    */
   async getJobBySnapshotId(snapshotId: string): Promise<JobData | null> {
     try {
-      console.log(`🔍 Searching Firebase for snapshot: ${snapshotId}`);
-      
-      const snapshot = await this.collection
-        .where('snapshotId', '==', snapshotId)
-        .limit(1)
-        .get();
+      console.log(`🔍 Searching all collections for snapshot: ${snapshotId}`);
 
-      if (snapshot.empty) {
-        console.log(`📭 No job found in Firebase for snapshot: ${snapshotId}`);
-        return null;
+      // Search in all collections
+      const collections = [this.linkedinCollection, this.indeedCollection];
+
+      for (const collection of collections) {
+        const snapshot = await collection
+          .where('snapshotId', '==', snapshotId)
+          .limit(1)
+          .get();
+
+        if (!snapshot.empty) {
+          const doc = snapshot.docs[0];
+          const jobData = {
+            id: doc.id,
+            ...doc.data()
+          } as JobData;
+
+          console.log(`✅ Found job in collection ${collection.id}:`, {
+            id: jobData.id,
+            status: jobData.status,
+            dataCount: jobData.metadata.dataCount,
+            actualArrayLength: jobData.data.length
+          });
+
+          return jobData;
+        }
       }
 
-      const doc = snapshot.docs[0];
-      const jobData = {
-        id: doc.id,
-        ...doc.data()
-      } as JobData;
-
-      console.log(`✅ Found job in Firebase:`, {
-        id: jobData.id,
-        status: jobData.status,
-        dataCount: jobData.metadata.dataCount,
-        actualArrayLength: Array.isArray(jobData.data) ? jobData.data.length : 'not array'
-      });
-
-      return jobData;
+      console.log(`📭 No job found in any collection for snapshot: ${snapshotId}`);
+      return null;
     } catch (error: any) {
       console.error('❌ Error fetching job data from Firebase:', error);
       throw error;
     }
   }
 
+
   /**
-   * Get all jobs with pagination and better error handling
+   * Get LinkedIn jobs specifically
    */
-  async getAllJobs(limit: number = 50, startAfter?: string): Promise<JobData[]> {
+  async getLinkedInJobs(limit: number = 5): Promise<JobData[]> {
     try {
-      let query = this.collection
+      const snapshot = await this.linkedinCollection
         .orderBy('createdAt', 'desc')
-        .limit(limit);
-
-      if (startAfter) {
-        const startDoc = await this.collection.doc(startAfter).get();
-        if (startDoc.exists) {
-          query = query.startAfter(startDoc);
-        }
-      }
-
-      const snapshot = await query.get();
-      
-      const jobs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as JobData));
-
-      console.log(`📊 Retrieved ${jobs.length} jobs from Firebase`);
-      return jobs;
-    } catch (error: any) {
-      console.error('❌ Error fetching jobs from Firebase:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete job data
-   */
-  async deleteJob(docId: string): Promise<void> {
-    try {
-      await this.collection.doc(docId).delete();
-      console.log(`✅ Job deleted from Firebase: ${docId}`);
-    } catch (error: any) {
-      console.error('❌ Error deleting job from Firebase:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get jobs by status
-   */
-  async getJobsByStatus(status: string): Promise<JobData[]> {
-    try {
-      const snapshot = await this.collection
-        .where('status', '==', status)
-        .orderBy('createdAt', 'desc')
+        .limit(limit)
         .get();
 
       const jobs = snapshot.docs.map(doc => ({
@@ -220,113 +280,83 @@ export class FirebaseJobService {
         ...doc.data()
       } as JobData));
 
-      console.log(`📊 Found ${jobs.length} jobs with status: ${status}`);
+      console.log(`📊 Retrieved ${jobs.length} LinkedIn jobs`);
       return jobs;
     } catch (error: any) {
-      console.error('❌ Error fetching jobs by status from Firebase:', error);
+      console.error('❌ Error fetching LinkedIn jobs:', error);
       throw error;
     }
   }
 
   /**
-   * Get job statistics with improved calculations
+   * Get Indeed jobs specifically
    */
-  async getJobStats(): Promise<{
-    total: number;
-    byStatus: { [key: string]: number };
-    totalRecords: number;
-    averageRecordsPerJob: number;
-    lastUpdated: Date;
-  }> {
+  async getIndeedJobs(limit: number = 5): Promise<JobData[]> {
     try {
-      const snapshot = await this.collection.get();
-      
-      const stats = {
-        total: snapshot.size,
-        byStatus: {} as { [key: string]: number },
-        totalRecords: 0,
-        averageRecordsPerJob: 0,
-        lastUpdated: new Date()
-      };
+      const snapshot = await this.indeedCollection
+        .orderBy('createdAt', 'desc')
+        .limit(limit)
+        .get();
 
-      snapshot.docs.forEach(doc => {
-        const data = doc.data() as JobData;
-        
-        // Count by status
-        stats.byStatus[data.status] = (stats.byStatus[data.status] || 0) + 1;
-        
-        // Count total records using both metadata and actual array length
-        const recordCount = Array.isArray(data.data) ? data.data.length : (data.metadata.dataCount || 0);
-        stats.totalRecords += recordCount;
-      });
+      const jobs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as JobData));
 
-      // Calculate average
-      stats.averageRecordsPerJob = stats.total > 0 ? Math.round(stats.totalRecords / stats.total * 100) / 100 : 0;
-
-      console.log(`📈 Firebase stats:`, stats);
-      return stats;
+      console.log(`📊 Retrieved ${jobs.length} Indeed jobs`);
+      return jobs;
     } catch (error: any) {
-      console.error('❌ Error fetching job stats from Firebase:', error);
+      console.error('❌ Error fetching Indeed jobs:', error);
       throw error;
     }
   }
 
   /**
-   * Find jobs with data count mismatches (for debugging)
+   * Get all jobs from both LinkedIn and Indeed collections
    */
-  async findDataCountMismatches(): Promise<JobData[]> {
+  async getAllJobs(limit: number = 100): Promise<JobData[]> {
     try {
-      const snapshot = await this.collection.get();
-      const mismatches: JobData[] = [];
+      console.log(`🔍 Fetching all jobs from both collections (limit: ${limit})`);
 
-      snapshot.docs.forEach(doc => {
-        const data = doc.data() as JobData;
-        const actualCount = Array.isArray(data.data) ? data.data.length : 0;
-        const recordedCount = data.metadata.dataCount || 0;
+      // Fetch from both collections in parallel
+      const [linkedinJobs, indeedJobs] = await Promise.all([
+        this.getLinkedInJobs(limit),
+        this.getIndeedJobs(limit)
+      ]);
 
-        if (actualCount !== recordedCount) {
-          mismatches.push({
-            id: doc.id,
-            ...data
-          } as JobData);
-        }
-      });
+      // Combine results
+      const allJobs = [...linkedinJobs, ...indeedJobs];
 
-      console.log(`🔍 Found ${mismatches.length} jobs with data count mismatches`);
-      return mismatches;
+      console.log(`📊 Retrieved ${allJobs.length} total jobs (${linkedinJobs.length} LinkedIn, ${indeedJobs.length} Indeed)`);
+      return allJobs;
     } catch (error: any) {
-      console.error('❌ Error finding data count mismatches:', error);
+      console.error('❌ Error fetching all jobs:', error);
       throw error;
     }
   }
 
   /**
-   * Fix data count mismatches
+   * Delete a job by document ID
    */
-  async fixDataCountMismatches(): Promise<number> {
+  async deleteJob(docId: string): Promise<void> {
     try {
-      const mismatches = await this.findDataCountMismatches();
-      let fixed = 0;
+      // Try to find and delete from both collections
+      const collections = [this.linkedinCollection, this.indeedCollection];
 
-      for (const job of mismatches) {
-        if (job.id) {
-          const actualCount = Array.isArray(job.data) ? job.data.length : 0;
-          await this.updateJobData(job.id, {
-            metadata: {
-              ...job.metadata,
-              dataCount: actualCount,
-              fixedAt: Timestamp.now()
-            }
-          });
-          fixed++;
-          console.log(`🔧 Fixed data count for job ${job.id}: ${job.metadata.dataCount} → ${actualCount}`);
+      for (const collection of collections) {
+        const docRef = collection.doc(docId);
+        const doc = await docRef.get();
+
+        if (doc.exists) {
+          await docRef.delete();
+          console.log(`✅ Deleted job ${docId} from ${collection.id}`);
+          return;
         }
       }
 
-      console.log(`✅ Fixed ${fixed} data count mismatches`);
-      return fixed;
+      throw new Error(`Document ${docId} not found in any collection`);
     } catch (error: any) {
-      console.error('❌ Error fixing data count mismatches:', error);
+      console.error('❌ Error deleting job:', error);
       throw error;
     }
   }

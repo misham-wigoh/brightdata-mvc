@@ -66,7 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             metadata: {
               dataCount: Array.isArray(data?.data) ? data.data.length : 0,
               webhookPayload: data,
-              triggeredAt: Timestamp.now()
+              triggeredAt: formatTimestamp(Timestamp.now())
             }
           });
         } catch (firebaseError: any) {
@@ -122,7 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 async function handleListSnapshots(res: NextApiResponse, source?: string) {
   const results: any = {};
-  
+
   try {
     // Get local snapshots
     if (!source || source === 'local' || source === 'both') {
@@ -140,13 +140,18 @@ async function handleListSnapshots(res: NextApiResponse, source?: string) {
       }
     }
 
+    // Create a combined list for backward compatibility
+    const allSnapshots = new Set([...(results.local || []), ...(results.firebase || [])]);
+
     return res.status(200).json({
       success: true,
       snapshots: results,
+      // Also provide the combined list for easier access
+      allSnapshots: Array.from(allSnapshots),
       counts: {
         local: results.local?.length || 0,
         firebase: results.firebase?.length || 0,
-        total: new Set([...(results.local || []), ...(results.firebase || [])]).size
+        total: allSnapshots.size
       }
     });
   } catch (error: any) {
@@ -272,4 +277,8 @@ async function handleDeleteSnapshot(res: NextApiResponse, snapshotId: string, so
       details: error.message
     });
   }
+}
+
+function formatTimestamp(arg0: Timestamp): string {
+  throw new Error('Function not implemented.');
 }
